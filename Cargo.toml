@@ -3,7 +3,7 @@ name = "dl_authorize"
 version = "0.1.0"
 edition = "2021"
 authors = ["Hazel Rowell"]
-description = "a simple resource based authorization system for the Internet Computer"
+description = "git"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
