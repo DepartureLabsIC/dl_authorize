@@ -1,6 +1,6 @@
-use std::collections::LinkedList;
-use ic_cdk::export::Principal;
 use crate::statement::RequestResource;
+use ic_cdk::export::Principal;
+use std::collections::LinkedList;
 
 pub struct RequestResourceBuilder {
     data: LinkedList<String>,
@@ -15,9 +15,7 @@ impl RequestResourceBuilder {
 
     pub fn add(mut self, node: &str) -> RequestResourceBuilder {
         self.data.push_front(node.to_string());
-        return RequestResourceBuilder {
-            data: self.data
-        };
+        return RequestResourceBuilder { data: self.data };
     }
 
     pub fn build(mut self) -> RequestResource {

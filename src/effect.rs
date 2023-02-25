@@ -1,5 +1,5 @@
+use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
-use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub enum Effect {
@@ -31,12 +31,12 @@ impl Ord for Effect {
     fn cmp(&self, other: &Self) -> Ordering {
         let left = match self {
             Self::Deny => 0,
-            _ => 1000
+            _ => 1000,
         };
 
         let right = match other {
             Self::Deny => 0,
-            _ => 1000
+            _ => 1000,
         };
 
         left.cmp(&right)

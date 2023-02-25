@@ -1,7 +1,7 @@
-use ic_cdk::export::Principal;
-use serde::{Serialize, Deserialize};
 use crate::effect::Effect;
 use crate::request::Request;
+use ic_cdk::export::Principal;
+use serde::{Deserialize, Serialize};
 
 /// Enum representing the identity of a user
 #[derive(Serialize, Deserialize)]
@@ -19,7 +19,7 @@ impl StatementIdentity {
     pub fn matches(&self, v: &Identity) -> bool {
         match (self, v) {
             (Self::Any, _) => true,
-            (Self::Identity(Identity::Principal(p1)), Identity::Principal(p2)) => p1 == p2
+            (Self::Identity(Identity::Principal(p1)), Identity::Principal(p2)) => p1 == p2,
         }
     }
 }
@@ -27,13 +27,19 @@ impl StatementIdentity {
 #[derive(Serialize, Deserialize, Debug)]
 pub enum RequestResource {
     Resource(String),
-    Nested { node: String, next: Option<Box<RequestResource>> },
+    Nested {
+        node: String,
+        next: Option<Box<RequestResource>>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum StatementResource {
     Resource(String),
-    Nested { node: String, next: Vec<StatementResource> },
+    Nested {
+        node: String,
+        next: Vec<StatementResource>,
+    },
 }
 
 impl StatementResource {
@@ -46,9 +52,10 @@ impl StatementResource {
 
     pub fn add_nested(mut self, nested: StatementResource) -> Self {
         match &mut self {
-            StatementResource::Resource(node) => {
-                StatementResource::Nested { node: node.clone(), next: vec![nested] }
-            }
+            StatementResource::Resource(node) => StatementResource::Nested {
+                node: node.clone(),
+                next: vec![nested],
+            },
             StatementResource::Nested { node, next } => {
                 next.push(nested);
                 self
@@ -57,10 +64,14 @@ impl StatementResource {
     }
 
     pub fn add_nested_resources(mut self, nested: Vec<StatementResource>) -> Self {
+        if nested.is_empty() {
+            return self;
+        }
         match &mut self {
-            StatementResource::Resource(node) => {
-                StatementResource::Nested { node: node.clone(), next: nested }
-            }
+            StatementResource::Resource(node) => StatementResource::Nested {
+                node: node.clone(),
+                next: nested,
+            },
             StatementResource::Nested { node, next } => {
                 next.extend(nested);
                 self
@@ -77,7 +88,16 @@ impl StatementResource {
             (Self::Nested { node, next }, RequestResource::Resource(r)) => {
                 return next.is_empty() && node == r;
             }
-            (Self::Nested { node: node_left, next: next_left }, RequestResource::Nested { node: node_right, next: next_right }) => {
+            (
+                Self::Nested {
+                    node: node_left,
+                    next: next_left,
+                },
+                RequestResource::Nested {
+                    node: node_right,
+                    next: next_right,
+                },
+            ) => {
                 if node_left != node_right {
                     return false;
                 }
@@ -104,7 +124,12 @@ pub struct Statement {
 }
 
 impl Statement {
-    pub fn new(effect: Effect, identities: Vec<StatementIdentity>, operations: Vec<String>, resources: Vec<StatementResource>) -> Self {
+    pub fn new(
+        effect: Effect,
+        identities: Vec<StatementIdentity>,
+        operations: Vec<String>,
+        resources: Vec<StatementResource>,
+    ) -> Self {
         Statement {
             effect,
             identities,
@@ -120,17 +145,16 @@ impl Statement {
             return None;
         }
 
-        let identity_match_maybe = self.identities.iter().find(|v| {
-            v.matches(&identity)
-        });
+        let identity_match_maybe = self.identities.iter().find(|v| v.matches(&identity));
 
         if identity_match_maybe.is_none() {
             return None;
         }
 
-        let resource_match_maybe = self.resources.iter().find(|v| {
-            v.matches(&request.resource())
-        });
+        let resource_match_maybe = self
+            .resources
+            .iter()
+            .find(|v| v.matches(&request.resource()));
 
         match (identity_match_maybe, resource_match_maybe) {
             (Some(_), Some(_)) => Some(self.effect.clone()),
@@ -171,65 +195,85 @@ mod resource_statement_tests {
     #[test]
     fn it_builds_a_statement_resource() {
         let v = StatementResource::Resource("Foo".to_string())
+            .add_nested(StatementResource::Resource("Bar".to_string()))
             .add_nested(
-                StatementResource::Resource("Bar".to_string())
-            )
-            .add_nested(
-                StatementResource::Resource("Baz".to_string())
-                    .add_nested_resources(vec![
-                        StatementResource::Resource("Fizz".to_string()),
-                        StatementResource::Resource("Fuzz".to_string()),
-                    ])
+                StatementResource::Resource("Baz".to_string()).add_nested_resources(vec![
+                    StatementResource::Resource("Fizz".to_string()),
+                    StatementResource::Resource("Fuzz".to_string()),
+                ]),
             );
         println!("{:?}", v);
     }
 
     #[test]
     fn it_matches_a_request_to_a_statement() {
-        let statement = StatementResource::Resource("Foo".to_string())
-            .add_nested(
-                StatementResource::Resource("Bar".to_string())
-                    .add_nested(
-                        StatementResource::Resource("Baz".to_string())
-                    )
-            );
-        assert!(statement.matches(&RequestResourceBuilder::new("Foo").add("Bar").add("Baz").build()));
-        assert!(!statement.matches(&RequestResourceBuilder::new("Foo").add("Bar").add("Fizz").build()));
+        let statement = StatementResource::Resource("Foo".to_string()).add_nested(
+            StatementResource::Resource("Bar".to_string())
+                .add_nested(StatementResource::Resource("Baz".to_string())),
+        );
+        assert!(statement.matches(
+            &RequestResourceBuilder::new("Foo")
+                .add("Bar")
+                .add("Baz")
+                .build()
+        ));
+        assert!(!statement.matches(
+            &RequestResourceBuilder::new("Foo")
+                .add("Bar")
+                .add("Fizz")
+                .build()
+        ));
     }
 
     #[test]
     fn it_matches_a_request_to_a_nested_statement() {
-        let statement = StatementResource::Resource("Foo".to_string())
-            .add_nested(
-                StatementResource::Resource("Bar".to_string())
-                    .add_nested(
-                        StatementResource::Resource("Baz".to_string())
-                    )
-                    .add_nested(
-                        StatementResource::Resource("Fizz".to_string())
-                    )
-            );
-        assert!(statement.matches(&RequestResourceBuilder::new("Foo").add("Bar").add("Baz").build()));
-        assert!(statement.matches(&RequestResourceBuilder::new("Foo").add("Bar").add("Fizz").build()));
+        let statement = StatementResource::Resource("Foo".to_string()).add_nested(
+            StatementResource::Resource("Bar".to_string())
+                .add_nested(StatementResource::Resource("Baz".to_string()))
+                .add_nested(StatementResource::Resource("Fizz".to_string())),
+        );
+        assert!(statement.matches(
+            &RequestResourceBuilder::new("Foo")
+                .add("Bar")
+                .add("Baz")
+                .build()
+        ));
+        assert!(statement.matches(
+            &RequestResourceBuilder::new("Foo")
+                .add("Bar")
+                .add("Fizz")
+                .build()
+        ));
     }
 
     #[test]
     fn it_matches_a_request_to_a_double_nexted_statement() {
-        let statement = StatementResource::Resource("Foo".to_string())
-            .add_nested(
-                StatementResource::Resource("Bar".to_string())
-                    .add_nested(
-                        StatementResource::Resource("Baz".to_string())
-                    )
-                    .add_nested(
-                        StatementResource::Resource("Fizz".to_string())
-                            .add_nested(
-                                StatementResource::Resource("Buzz".to_string())
-                            )
-                    )
-            );
-        assert!(statement.matches(&RequestResourceBuilder::new("Foo").add("Bar").add("Baz").build()));
-        assert!(!statement.matches(&RequestResourceBuilder::new("Foo").add("Bar").add("Fizz").build()));
-        assert!(statement.matches(&RequestResourceBuilder::new("Foo").add("Bar").add("Fizz").add("Buzz").build()));
+        let statement = StatementResource::Resource("Foo".to_string()).add_nested(
+            StatementResource::Resource("Bar".to_string())
+                .add_nested(StatementResource::Resource("Baz".to_string()))
+                .add_nested(
+                    StatementResource::Resource("Fizz".to_string())
+                        .add_nested(StatementResource::Resource("Buzz".to_string())),
+                ),
+        );
+        assert!(statement.matches(
+            &RequestResourceBuilder::new("Foo")
+                .add("Bar")
+                .add("Baz")
+                .build()
+        ));
+        assert!(!statement.matches(
+            &RequestResourceBuilder::new("Foo")
+                .add("Bar")
+                .add("Fizz")
+                .build()
+        ));
+        assert!(statement.matches(
+            &RequestResourceBuilder::new("Foo")
+                .add("Bar")
+                .add("Fizz")
+                .add("Buzz")
+                .build()
+        ));
     }
 }
